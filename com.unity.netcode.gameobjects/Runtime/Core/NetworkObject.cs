@@ -954,17 +954,106 @@ namespace Unity.Netcode
 
         internal struct SceneObject
         {
+            [Flags]
+            private enum PropertyFlags
+            {
+                None            = 0,
+
+                IsPlayerObject  = 1 << 0,
+                HasParent       = 1 << 1,
+                IsSceneObject   = 1 << 2,
+                HasTransform    = 1 << 3,
+                IsReparented    = 1 << 4,
+                IsClientOwned   = 1 << 5,
+                // Note: If this is expanded beyond 1 << 7 (8 bits), HeaderData.Properties will need to be upgraded from byte to ushort
+            }
+
             public struct HeaderData : INetworkSerializeByMemcpy
             {
                 public ulong NetworkObjectId;
-                public ulong OwnerClientId;
                 public uint Hash;
+                public byte Properties;
 
+                public bool IsPlayerObject
+                {
+                    get => HasFlag(PropertyFlags.IsPlayerObject);
+                    set => UpdateFlag(PropertyFlags.IsPlayerObject, value);
+                }
+
+                public bool HasParent
+                {
+                    get => HasFlag(PropertyFlags.HasParent);
+                    set => UpdateFlag(PropertyFlags.HasParent, value);
+                }
+
+                public bool IsSceneObject
+                {
+                    get => HasFlag(PropertyFlags.IsSceneObject);
+                    set => UpdateFlag(PropertyFlags.IsSceneObject, value);
+                }
+
+                public bool HasTransform
+                {
+                    get => HasFlag(PropertyFlags.HasTransform);
+                    set => UpdateFlag(PropertyFlags.HasTransform, value);
+                }
+
+                public bool IsReparented
+                {
+                    get => HasFlag(PropertyFlags.IsReparented);
+                    set => UpdateFlag(PropertyFlags.IsReparented, value);
+                }
+
+                public bool IsClientOwned
+                {
+                    get => HasFlag(PropertyFlags.IsClientOwned);
+                    set => UpdateFlag(PropertyFlags.IsClientOwned, value);
+                }
+
+                private bool HasFlag(PropertyFlags flag)
+                {
+                    return ((PropertyFlags)Properties & flag) != 0;
+                }
+
+                private void UpdateFlag(PropertyFlags flag, bool value)
+                {
+                    if(value)
+                    {
+                        // set flag
+                        Properties |= (byte)flag;
+                    }
+                    else
+                    {
+                        // unset flag
+                        Properties &= (byte)~flag;
+                    }
+                }
+
+                public readonly ObjectProperties ToProperties()
+                {
+                    var objectFlags = (PropertyFlags)Properties;
+
+                    return new ObjectProperties()
+                    {
+                        // Enum.HasFlag() is more readable than these bitwise operations, but isn't performant and we want spawns to be fast
+                        IsPlayerObject = (objectFlags & PropertyFlags.IsPlayerObject) != 0,
+                        HasParent = (objectFlags & PropertyFlags.HasParent) != 0,
+                        HasTransform = (objectFlags & PropertyFlags.HasTransform) != 0,
+                        IsReparented = (objectFlags & PropertyFlags.IsReparented) != 0,
+                        IsSceneObject = (objectFlags & PropertyFlags.IsSceneObject) != 0,
+                        IsClientOwned = (objectFlags & PropertyFlags.IsClientOwned) != 0,
+                    };
+                }
+            }
+
+            public struct ObjectProperties
+            {
                 public bool IsPlayerObject;
                 public bool HasParent;
-                public bool IsSceneObject;
                 public bool HasTransform;
                 public bool IsReparented;
+                public bool IsSceneObject;
+                public bool IsClientOwned;
             }
 
             public HeaderData Header;
@@ -987,6 +1076,9 @@ namespace Unity.Netcode
             //If(IsLatestParentSet)
             public ulong? LatestParent;
 
+            //If(IsClientOwned)
+            public ulong OwnerClientId;
+
             public NetworkObject OwnerObject;
             public ulong TargetClientId;
 
@@ -994,11 +1086,14 @@ namespace Unity.Netcode
 
             public unsafe void Serialize(FastBufferWriter writer)
             {
+                var objectProperties = Header.ToProperties();
+
                 var writeSize = sizeof(HeaderData);
-                writeSize += Header.HasParent ? FastBufferWriter.GetWriteSize(ParentObjectId) : 0;
-                writeSize += Header.HasTransform ? FastBufferWriter.GetWriteSize(Transform) : 0;
-                writeSize += Header.IsReparented ? FastBufferWriter.GetWriteSize(IsLatestParentSet) + (IsLatestParentSet ? FastBufferWriter.GetWriteSize<ulong>() : 0) : 0;
-                writeSize += Header.IsSceneObject ? FastBufferWriter.GetWriteSize<int>() : 0;
+                writeSize += objectProperties.HasParent ? FastBufferWriter.GetWriteSize(ParentObjectId) : 0;
+                writeSize += objectProperties.HasTransform ? FastBufferWriter.GetWriteSize(Transform) : 0;
+                writeSize += objectProperties.IsReparented ? FastBufferWriter.GetWriteSize(IsLatestParentSet) + (IsLatestParentSet ? FastBufferWriter.GetWriteSize<ulong>() : 0) : 0;
+                writeSize += objectProperties.IsSceneObject ? FastBufferWriter.GetWriteSize<int>() : 0;
+                writeSize += objectProperties.IsClientOwned ? FastBufferWriter.GetWriteSize<ulong>() : 0;
 
                 if (!writer.TryBeginWrite(writeSize))
                 {
@@ -1007,17 +1102,17 @@ namespace Unity.Netcode
 
                 writer.WriteValue(Header);
 
-                if (Header.HasParent)
+                if (objectProperties.HasParent)
                 {
                     writer.WriteValue(ParentObjectId);
                 }
 
-                if (Header.HasTransform)
+                if (objectProperties.HasTransform)
                 {
                     writer.WriteValue(Transform);
                 }
 
-                if (Header.IsReparented)
+                if (objectProperties.IsReparented)
                 {
                     writer.WriteValue(IsLatestParentSet);
                     if (IsLatestParentSet)
@@ -1031,9 +1126,14 @@ namespace Unity.Netcode
                 // handle, it provides us with a unique and persistent "scene prefab asset" instance.
                 // This is only set on in-scene placed NetworkObjects to reduce the over-all packet
                 // sizes for dynamically spawned NetworkObjects.
-                if (Header.IsSceneObject)
+                if (objectProperties.IsSceneObject)
                 {
                     writer.WriteValue(OwnerObject.GetSceneOriginHandle());
+                }
+
+                if (objectProperties.IsClientOwned)
+                {
+                    writer.WriteValue(OwnerClientId);
                 }
 
                 OwnerObject.WriteNetworkVariableData(writer, TargetClientId);
@@ -1046,27 +1146,30 @@ namespace Unity.Netcode
                     throw new OverflowException("Could not deserialize SceneObject: Out of buffer space.");
                 }
                 reader.ReadValue(out Header);
-                var readSize = Header.HasParent ? FastBufferWriter.GetWriteSize(ParentObjectId) : 0;
-                readSize += Header.HasTransform ? FastBufferWriter.GetWriteSize(Transform) : 0;
-                readSize += Header.IsReparented ? FastBufferWriter.GetWriteSize(IsLatestParentSet) + (IsLatestParentSet ? FastBufferWriter.GetWriteSize<ulong>() : 0) : 0;
-                readSize += Header.IsSceneObject ? FastBufferWriter.GetWriteSize<int>() : 0;
+                var objectProperties = Header.ToProperties();
+
+                var readSize = objectProperties.HasParent ? FastBufferWriter.GetWriteSize(ParentObjectId) : 0;
+                readSize += objectProperties.HasTransform ? FastBufferWriter.GetWriteSize(Transform) : 0;
+                readSize += objectProperties.IsReparented ? FastBufferWriter.GetWriteSize(IsLatestParentSet) + (IsLatestParentSet ? FastBufferWriter.GetWriteSize<ulong>() : 0) : 0;
+                readSize += objectProperties.IsSceneObject ? FastBufferWriter.GetWriteSize<int>() : 0;
+                readSize += objectProperties.IsClientOwned ? FastBufferWriter.GetWriteSize<ulong>() : 0;
 
                 if (!reader.TryBeginRead(readSize))
                 {
                     throw new OverflowException("Could not deserialize SceneObject: Out of buffer space.");
                 }
 
-                if (Header.HasParent)
+                if (objectProperties.HasParent)
                 {
                     reader.ReadValue(out ParentObjectId);
                 }
 
-                if (Header.HasTransform)
+                if (objectProperties.HasTransform)
                 {
                     reader.ReadValue(out Transform);
                 }
 
-                if (Header.IsReparented)
+                if (objectProperties.IsReparented)
                 {
                     reader.ReadValue(out IsLatestParentSet);
                     if (IsLatestParentSet)
@@ -1081,9 +1184,18 @@ namespace Unity.Netcode
                 // handle, it provides us with a unique and persistent "scene prefab asset" instance.
                 // Client-side NetworkSceneManagers use this to locate their local instance of the
                 // NetworkObject instance.
-                if (Header.IsSceneObject)
+                if (objectProperties.IsSceneObject)
                 {
                     reader.ReadValueSafe(out NetworkSceneHandle);
+                }
+
+                if (objectProperties.IsClientOwned)
+                {
+                    reader.ReadValueSafe(out OwnerClientId);
+                }
+                else
+                {
+                    OwnerClientId = NetworkManager.ServerClientId;
                 }
             }
         }
@@ -1096,12 +1208,13 @@ namespace Unity.Netcode
                 {
                     IsPlayerObject = IsPlayerObject,
                     NetworkObjectId = NetworkObjectId,
-                    OwnerClientId = OwnerClientId,
+                    IsClientOwned = OwnerClientId != NetworkManager.ServerClientId,
                     IsSceneObject = IsSceneObject ?? true,
                     Hash = HostCheckForGlobalObjectIdHashOverride(),
                 },
                 OwnerObject = this,
-                TargetClientId = targetClientId
+                TargetClientId = targetClientId,
+                OwnerClientId = OwnerClientId
             };
 
             NetworkObject parentNetworkObject = null;
@@ -1119,17 +1232,18 @@ namespace Unity.Netcode
             if (IncludeTransformWhenSpawning == null || IncludeTransformWhenSpawning(OwnerClientId))
             {
                 obj.Header.HasTransform = true;
+                var objTransform = transform;
                 obj.Transform = new SceneObject.TransformData
                 {
-                    Position = transform.position,
-                    Rotation = transform.rotation
+                    Position = objTransform.position,
+                    Rotation = objTransform.rotation
                 };
             }
 
             var (isReparented, latestParent) = GetNetworkParenting();
-            obj.Header.IsReparented = isReparented;
             if (isReparented)
             {
+                obj.Header.IsReparented = true;
                 var isLatestParentSet = latestParent != null && latestParent.HasValue;
                 obj.IsLatestParentSet = isLatestParentSet;
                 if (isLatestParentSet)
@@ -1155,29 +1269,30 @@ namespace Unity.Netcode
             Quaternion? rotation = null;
             ulong? parentNetworkId = null;
             int? networkSceneHandle = null;
+            var objectProperties = sceneObject.Header.ToProperties();
 
-            if (sceneObject.Header.HasTransform)
+            if (objectProperties.HasTransform)
             {
                 position = sceneObject.Transform.Position;
                 rotation = sceneObject.Transform.Rotation;
             }
 
-            if (sceneObject.Header.HasParent)
+            if (objectProperties.HasParent)
             {
                 parentNetworkId = sceneObject.ParentObjectId;
             }
 
-            if (sceneObject.Header.IsSceneObject)
+            if (objectProperties.IsSceneObject)
             {
                 networkSceneHandle = sceneObject.NetworkSceneHandle;
             }
 
             //Attempt to create a local NetworkObject
             var networkObject = networkManager.SpawnManager.CreateLocalNetworkObject(
-                sceneObject.Header.IsSceneObject, sceneObject.Header.Hash,
-                sceneObject.Header.OwnerClientId, parentNetworkId, networkSceneHandle, position, rotation, sceneObject.Header.IsReparented);
+                objectProperties.IsSceneObject, sceneObject.Header.Hash,
+                sceneObject.OwnerClientId, parentNetworkId, networkSceneHandle, position, rotation, objectProperties.IsReparented);
 
-            networkObject?.SetNetworkParenting(sceneObject.Header.IsReparented, sceneObject.LatestParent);
+            networkObject?.SetNetworkParenting(objectProperties.IsReparented, sceneObject.LatestParent);
 
             if (networkObject == null)
             {
