@@ -472,6 +472,8 @@ namespace Unity.Netcode
                     NetworkManager.SpawnManager.SendSpawnCallForObject(NetworkManager.ConnectedClientsList[i].ClientId, this);
                 }
             }
+
+            MarkVariablesDirty(false);
         }
 
         /// <summary>
