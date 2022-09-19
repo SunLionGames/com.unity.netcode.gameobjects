@@ -388,29 +388,32 @@ namespace Unity.Netcode
         /// </summary>
         internal void UpdateNetworkProperties()
         {
+            var networkObject = NetworkObject;
+            var networkManager = NetworkManager;
+
             // Set NetworkObject dependent properties
-            if (NetworkObject != null)
+            if (networkObject != null)
             {
                 // Set identification related properties
-                NetworkObjectId = NetworkObject.NetworkObjectId;
-                IsLocalPlayer = NetworkObject.IsLocalPlayer;
+                NetworkObjectId = networkObject.NetworkObjectId;
+                IsLocalPlayer = networkObject.IsLocalPlayer;
 
                 // This is "OK" because GetNetworkBehaviourOrderIndex uses the order of
                 // NetworkObject.ChildNetworkBehaviours which is set once when first
                 // accessed.
-                NetworkBehaviourId = NetworkObject.GetNetworkBehaviourOrderIndex(this);
+                NetworkBehaviourId = networkObject.GetNetworkBehaviourOrderIndex(this);
 
                 // Set ownership related properties
-                IsOwnedByServer = NetworkObject.IsOwnedByServer;
-                IsOwner = NetworkObject.IsOwner;
-                OwnerClientId = NetworkObject.OwnerClientId;
+                IsOwnedByServer = networkObject.IsOwnedByServer;
+                IsOwner = networkObject.IsOwner;
+                OwnerClientId = networkObject.OwnerClientId;
 
                 // Set NetworkManager dependent properties
-                if (NetworkManager != null)
+                if (networkManager != null)
                 {
-                    IsHost = NetworkManager.IsListening && NetworkManager.IsHost;
-                    IsClient = NetworkManager.IsListening && NetworkManager.IsClient;
-                    IsServer = NetworkManager.IsListening && NetworkManager.IsServer;
+                    IsHost = networkManager.IsListening && networkManager.IsHost;
+                    IsClient = networkManager.IsListening && networkManager.IsClient;
+                    IsServer = networkManager.IsListening && networkManager.IsServer;
                 }
             }
             else // Shouldn't happen, but if so then set the properties to their default value;
