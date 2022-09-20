@@ -49,7 +49,7 @@ namespace Unity.Netcode
             {
                 Metadata = new RpcMetadata
                 {
-                    NetworkObjectId = NetworkObjectId,
+                    NetworkObjectId = (uint)NetworkObjectId,
                     NetworkBehaviourId = NetworkBehaviourId,
                     NetworkRpcMethodId = rpcMethodId,
                 },
@@ -130,7 +130,7 @@ namespace Unity.Netcode
             {
                 Metadata = new RpcMetadata
                 {
-                    NetworkObjectId = NetworkObjectId,
+                    NetworkObjectId = (uint)NetworkObjectId,
                     NetworkBehaviourId = NetworkBehaviourId,
                     NetworkRpcMethodId = rpcMethodId,
                 },
@@ -632,8 +632,8 @@ namespace Unity.Netcode
                 {
                     var message = new NetworkVariableDeltaMessage
                     {
-                        NetworkObjectId = NetworkObjectId,
-                        NetworkBehaviourIndex = NetworkObject.GetNetworkBehaviourOrderIndex(this),
+                        NetworkObjectId = (uint)NetworkObjectId,
+                        NetworkBehaviourIndex = (byte)NetworkObject.GetNetworkBehaviourOrderIndex(this),
                         NetworkBehaviour = this,
                         TargetClientId = targetClientId,
                         DeliveryMappedNetworkVariableIndex = m_DeliveryMappedNetworkVariableIndices[j]

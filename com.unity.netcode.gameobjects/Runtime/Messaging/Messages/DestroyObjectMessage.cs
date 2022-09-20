@@ -2,7 +2,7 @@ namespace Unity.Netcode
 {
     internal struct DestroyObjectMessage : INetworkMessage, INetworkSerializeByMemcpy
     {
-        public ulong NetworkObjectId;
+        public uint NetworkObjectId;
         public bool DestroyGameObject;
 
         public void Serialize(FastBufferWriter writer)

@@ -85,7 +85,7 @@ namespace Unity.Netcode
 
     internal struct RpcMetadata : INetworkSerializeByMemcpy
     {
-        public ulong NetworkObjectId;
+        public uint NetworkObjectId;
         public ushort NetworkBehaviourId;
         public uint NetworkRpcMethodId;
     }
@@ -115,7 +115,7 @@ namespace Unity.Netcode
                 {
                     Receive = new ServerRpcReceiveParams
                     {
-                        SenderClientId = context.SenderId
+                        SenderClientId = (byte)context.SenderId
                     }
                 }
             };

@@ -365,7 +365,7 @@ namespace Unity.Netcode
 
             var message = new DestroyObjectMessage
             {
-                NetworkObjectId = NetworkObjectId,
+                NetworkObjectId = (uint)NetworkObjectId,
                 DestroyGameObject = !IsSceneObject.Value
             };
             // Send destroy call
@@ -970,7 +970,7 @@ namespace Unity.Netcode
 
             public struct HeaderData : INetworkSerializeByMemcpy
             {
-                public ulong NetworkObjectId;
+                public uint NetworkObjectId;
                 public uint Hash;
                 public byte Properties;
 
@@ -1207,7 +1207,7 @@ namespace Unity.Netcode
                 Header = new SceneObject.HeaderData
                 {
                     IsPlayerObject = IsPlayerObject,
-                    NetworkObjectId = NetworkObjectId,
+                    NetworkObjectId = (uint)NetworkObjectId,
                     IsClientOwned = OwnerClientId != NetworkManager.ServerClientId,
                     IsSceneObject = IsSceneObject ?? true,
                     Hash = HostCheckForGlobalObjectIdHashOverride(),

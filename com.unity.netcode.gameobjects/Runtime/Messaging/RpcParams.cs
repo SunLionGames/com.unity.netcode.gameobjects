@@ -22,7 +22,7 @@ namespace Unity.Netcode
         /// Server-Side RPC
         /// The client identifier of the sender
         /// </summary>
-        public ulong SenderClientId;
+        public byte SenderClientId;
     }
 
     /// <summary>

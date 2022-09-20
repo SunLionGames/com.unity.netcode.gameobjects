@@ -12,8 +12,8 @@ namespace Unity.Netcode
     /// </summary>
     internal struct NetworkVariableDeltaMessage : INetworkMessage
     {
-        public ulong NetworkObjectId;
-        public ushort NetworkBehaviourIndex;
+        public uint NetworkObjectId;
+        public byte NetworkBehaviourIndex;
 
         public HashSet<int> DeliveryMappedNetworkVariableIndex;
         public ulong TargetClientId;
