@@ -210,15 +210,16 @@ namespace Unity.Netcode
         /// <param name="networkDelivery">The delivery type (QoS) to send data with</param>
         public void SendNamedMessage(string messageName, ulong clientId, FastBufferWriter messageStream, NetworkDelivery networkDelivery = NetworkDelivery.ReliableSequenced)
         {
-            ulong hash = 0;
+            uint hash = 0;
             switch (m_NetworkManager.NetworkConfig.RpcHashSize)
             {
                 case HashSize.VarIntFourBytes:
                     hash = XXHash.Hash32(messageName);
                     break;
                 case HashSize.VarIntEightBytes:
-                    hash = XXHash.Hash64(messageName);
-                    break;
+                    throw new NotSupportedException("Support for 8B hashes for custom messages was removed to save bandwidth");
+                    //hash = XXHash.Hash64(messageName);
+                    //break;
             }
 
             var message = new NamedMessage
@@ -254,15 +255,16 @@ namespace Unity.Netcode
                 throw new ArgumentNullException("You must pass in a valid clientId List");
             }
 
-            ulong hash = 0;
+            uint hash = 0;
             switch (m_NetworkManager.NetworkConfig.RpcHashSize)
             {
                 case HashSize.VarIntFourBytes:
                     hash = XXHash.Hash32(messageName);
                     break;
                 case HashSize.VarIntEightBytes:
-                    hash = XXHash.Hash64(messageName);
-                    break;
+                    throw new NotSupportedException("Support for 8B hashes for custom messages was removed to save bandwidth");
+                    //hash = XXHash.Hash64(messageName);
+                    //break;
             }
             var message = new NamedMessage
             {

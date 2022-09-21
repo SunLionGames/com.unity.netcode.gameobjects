@@ -2,7 +2,7 @@ namespace Unity.Netcode
 {
     internal struct NamedMessage : INetworkMessage
     {
-        public ulong Hash;
+        public uint Hash;
         public FastBufferWriter SendData;
 
         private FastBufferReader m_ReceiveData;
