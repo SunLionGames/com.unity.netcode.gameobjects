@@ -8,24 +8,21 @@ namespace Unity.Netcode
     {
         public static unsafe void Serialize(ref FastBufferWriter writer, ref RpcMetadata metadata, ref FastBufferWriter payload)
         {
-            if (!writer.TryBeginWrite(FastBufferWriter.GetWriteSize<RpcMetadata>() + payload.Length))
+            writer.WriteValue(metadata);
+
+            if (!writer.TryBeginWrite(payload.Length))
             {
                 throw new OverflowException("Not enough space in the buffer to store RPC data.");
             }
 
-            writer.WriteValue(metadata);
             writer.WriteBytes(payload.GetUnsafePtr(), payload.Length);
         }
 
         public static unsafe bool Deserialize(ref FastBufferReader reader, ref NetworkContext context, ref RpcMetadata metadata, ref FastBufferReader payload)
         {
-            int metadataSize = FastBufferWriter.GetWriteSize<RpcMetadata>();
-            if (!reader.TryBeginRead(metadataSize))
-            {
-                throw new InvalidOperationException("Not enough data in the buffer to read RPC meta.");
-            }
-
+            var readStartPosition = reader.Position;
             reader.ReadValue(out metadata);
+            var metadataSize = reader.Position - readStartPosition;
 
             var networkManager = (NetworkManager)context.SystemOwner;
             if (!networkManager.SpawnManager.SpawnedObjects.ContainsKey(metadata.NetworkObjectId))
@@ -83,11 +80,29 @@ namespace Unity.Netcode
         }
     }
 
-    internal struct RpcMetadata : INetworkSerializeByMemcpy
+    internal struct RpcMetadata : INetworkSerializable
     {
         public uint NetworkObjectId;
         public ushort NetworkBehaviourId;
         public uint NetworkRpcMethodId;
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            if (serializer.IsWriter)
+            {
+                var writer = serializer.GetFastBufferWriter();
+                BytePacker.WriteValueBitPacked(writer, NetworkObjectId);
+                BytePacker.WriteValueBitPacked(writer, NetworkBehaviourId);
+                writer.WriteValueSafe(NetworkRpcMethodId);
+            }
+            else
+            {
+                var reader = serializer.GetFastBufferReader();
+                ByteUnpacker.ReadValueBitPacked(reader, out NetworkObjectId);
+                ByteUnpacker.ReadValueBitPacked(reader, out NetworkBehaviourId);
+                reader.ReadValueSafe(out NetworkRpcMethodId);
+            }
+        }
     }
 
     internal struct ServerRpcMessage : INetworkMessage
