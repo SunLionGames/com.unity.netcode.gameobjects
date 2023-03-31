@@ -681,6 +681,8 @@ namespace Unity.Netcode
             }
         }
 
+        private static FastBufferWriter s_TempNetVarWriter = new(1024, Allocator.Persistent);
+
         internal void WriteNetworkVariableData(FastBufferWriter writer, ulong targetClientId)
         {
             if (NetworkVariableFields.Count == 0)
@@ -694,14 +696,16 @@ namespace Unity.Netcode
 
                 if (canClientRead)
                 {
-                    var writePos = writer.Position;
-                    writer.WriteValueSafe((ushort)0);
-                    var startPos = writer.Position;
-                    NetworkVariableFields[j].WriteField(writer);
-                    var size = writer.Position - startPos;
-                    writer.Seek(writePos);
-                    writer.WriteValueSafe((ushort)size);
-                    writer.Seek(startPos + size);
+                    s_TempNetVarWriter.Truncate(0);
+                    NetworkVariableFields[j].WriteField(s_TempNetVarWriter);
+                    BytePacker.WriteValueBitPacked(writer, (ushort)s_TempNetVarWriter.Position);
+
+                    if (!writer.TryBeginWrite(s_TempNetVarWriter.Position))
+                    {
+                        throw new OverflowException($"Not enough space in the buffer to write {nameof(NetworkVariableDeltaMessage)}");
+                    }
+
+                    s_TempNetVarWriter.CopyTo(writer);
                 }
                 else
                 {
@@ -719,7 +723,7 @@ namespace Unity.Netcode
 
             for (int j = 0; j < NetworkVariableFields.Count; j++)
             {
-                reader.ReadValueSafe(out ushort varSize);
+                ByteUnpacker.ReadValueBitPacked(reader, out ushort varSize);
                 if (varSize == 0)
                 {
                     continue;

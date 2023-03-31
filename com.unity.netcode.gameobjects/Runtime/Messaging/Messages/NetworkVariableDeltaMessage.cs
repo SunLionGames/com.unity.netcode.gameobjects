@@ -23,13 +23,8 @@ namespace Unity.Netcode
 
         public void Serialize(FastBufferWriter writer)
         {
-            if (!writer.TryBeginWrite(FastBufferWriter.GetWriteSize(NetworkObjectId) + FastBufferWriter.GetWriteSize(NetworkBehaviourIndex)))
-            {
-                throw new OverflowException($"Not enough space in the buffer to write {nameof(NetworkVariableDeltaMessage)}");
-            }
-
-            writer.WriteValue(NetworkObjectId);
-            writer.WriteValue(NetworkBehaviourIndex);
+            BytePacker.WriteValueBitPacked(writer, NetworkObjectId);
+            writer.WriteByteSafe(NetworkBehaviourIndex);
 
             for (int i = 0; i < NetworkBehaviour.NetworkVariableFields.Count; i++)
             {
@@ -112,13 +107,8 @@ namespace Unity.Netcode
 
         public bool Deserialize(FastBufferReader reader, ref NetworkContext context)
         {
-            if (!reader.TryBeginRead(FastBufferWriter.GetWriteSize(NetworkObjectId) + FastBufferWriter.GetWriteSize(NetworkBehaviourIndex)))
-            {
-                throw new OverflowException($"Not enough data in the buffer to read {nameof(NetworkVariableDeltaMessage)}");
-            }
-
-            reader.ReadValue(out NetworkObjectId);
-            reader.ReadValue(out NetworkBehaviourIndex);
+            ByteUnpacker.ReadValueBitPacked(reader, out NetworkObjectId);
+            reader.ReadByteSafe(out NetworkBehaviourIndex);
 
             m_ReceivedNetworkVariableData = reader;
 
